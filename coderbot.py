@@ -23,6 +23,7 @@ import pigpio
 import config
 import logging
 import sonar
+import pibrella
 
 PIN_MOTOR_ENABLE = 22
 PIN_LEFT_FORWARD = 25
@@ -63,7 +64,8 @@ class CoderBot:
     if self._servo:
       self.motor_control = self._servo_motor
     else:
-      self.motor_control = self._dc_motor
+        self.motor_control = self._pibrella_motor
+
     self._cb1 = self.pi.callback(PIN_PUSHBUTTON, pigpio.EITHER_EDGE, coderbot_callback)
     self._cb2 = self.pi.callback(PIN_ENCODER_LEFT, pigpio.RISING_EDGE, coderbot_callback)
     self._cb3 = self.pi.callback(PIN_ENCODER_RIGHT, pigpio.RISING_EDGE, coderbot_callback)
@@ -75,7 +77,7 @@ class CoderBot:
     self._is_moving = False
     self.sonar = [sonar.Sonar(self.pi, PIN_SONAR_1_TRIGGER, PIN_SONAR_1_ECHO),
                   sonar.Sonar(self.pi, PIN_SONAR_2_TRIGGER, PIN_SONAR_2_ECHO),
-                  sonar.Sonar(self.pi, PIN_SONAR_3_TRIGGER, PIN_SONAR_3_ECHO)] 
+                  sonar.Sonar(self.pi, PIN_SONAR_3_TRIGGER, PIN_SONAR_3_ECHO)]
     self._encoder_cur_left = 0
     self._encoder_cur_right = 0
     self._encoder_target_left = -1
@@ -127,7 +129,7 @@ class CoderBot:
     self._encoder_cur_right = 0
     self._encoder_target_left = steps_left
     self._encoder_target_right = steps_right
-    
+
     self._is_moving = True
     if speed_left < 0:
       speed_left = abs(speed_left)
@@ -149,6 +151,33 @@ class CoderBot:
     if elapse > 0:
       time.sleep(elapse)
       self.stop()
+
+  def _pibrella_motor(self, speed_left=100, speed_right=100, elapse=-1, steps_left=-1, steps_right=-1 ):
+    self._encoder_cur_left = 0
+    self._encoder_cur_right = 0
+    self._encoder_target_left = steps_left
+    self._encoder_target_right = steps_right
+
+    self._is_moving = True
+    print "ps left:", speed_left
+    print "sp right:", speed_right
+
+    if speed_left < 0:
+      speed_left = abs(speed_left)
+      pibrella.output.e.off()
+    else:
+      pibrella.output.e.on()
+
+    if speed_right < 0:
+      speed_right = abs(speed_right)
+      pibrella.output.g.off()
+    else:
+      pibrella.output.g.on()
+
+
+    if elapse > 0:
+      time.sleep(elapse)
+      self.pibrella_stop()
 
   def _servo_motor(self, speed_left=100, speed_right=100, elapse=-1):
     self._is_moving = True
@@ -185,6 +214,12 @@ class CoderBot:
       self.pi.write(pin, 0)
     self._is_moving = False
 
+  def pibrella_stop(self):
+    pibrella.output.e.off()
+    pibrella.output.h.off()
+    self._is_moving = False
+
+
   def is_moving(self):
     return self._is_moving
 
@@ -210,7 +245,7 @@ class CoderBot:
         elapse = self._cb_elapse.get(gpio)
         if level == 0:
           self._cb_last_tick[gpio] = tick
-        elif tick - self._cb_last_tick[gpio] > elapse: 
+        elif tick - self._cb_last_tick[gpio] > elapse:
           self._cb_last_tick[gpio] = tick
           print "pushed: ", level, tick
           cb()
@@ -223,6 +258,3 @@ class CoderBot:
 
   def reboot(self):
     os.system ('sudo reboot')
-
-
-  
